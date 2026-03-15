@@ -62,7 +62,7 @@ CFLAGS := -g -Wall -O3 -ffunction-sections -fdata-sections -flto \
           -fno-strict-aliasing -frename-registers -falign-functions=16 \
           $(ARCH) $(DEFINES)
 
-CFLAGS	+=	$(INCLUDE) -D__SWITCH__
+CFLAGS += $(INCLUDE) -D__SWITCH__ -DAPP_VERSION="\"$(APP_VERSION)\"" -D_FORTIFY_SOURCE=2
 
 # Enable appearance overriding
 UI_OVERRIDE_PATH := /config/NX-FanControl/
