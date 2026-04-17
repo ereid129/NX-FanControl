@@ -25,8 +25,6 @@ tsl::elm::Element* MainMenu::createUI()
 {
     this->_tableIsChanged = false;
 
-    auto frame = new tsl::elm::OverlayFrame("NX-FanControl", APP_VERSION);
-
     auto list = new tsl::elm::List();
 
     this->_enabledBtn->setStateChangedListener([this](bool state)
@@ -57,7 +55,7 @@ tsl::elm::Element* MainMenu::createUI()
     {
 	    if (keys & HidNpadButton_A) 
         {
-            tsl::shiftItemFocus(this->_p0Label);
+            //tsl::shiftItemFocus(this->_p0Label);
 			tsl::changeTo<SelectMenu>(0, this->_fanCurveTable, &this->_tableIsChanged);
 			return true;
 		}
@@ -69,7 +67,7 @@ tsl::elm::Element* MainMenu::createUI()
     {
 	    if (keys & HidNpadButton_A) 
         {
-            tsl::shiftItemFocus(this->_p1Label);
+            //tsl::shiftItemFocus(this->_p1Label);
 			tsl::changeTo<SelectMenu>(1, this->_fanCurveTable, &this->_tableIsChanged);
 			return true;
 		}
@@ -81,7 +79,7 @@ tsl::elm::Element* MainMenu::createUI()
     {
 	    if (keys & HidNpadButton_A) 
         {
-            tsl::shiftItemFocus(this->_p2Label);
+            //tsl::shiftItemFocus(this->_p2Label);
 			tsl::changeTo<SelectMenu>(2, this->_fanCurveTable, &this->_tableIsChanged);
 			return true;
 		}
@@ -93,7 +91,7 @@ tsl::elm::Element* MainMenu::createUI()
     {
 	    if (keys & HidNpadButton_A) 
         {
-            tsl::shiftItemFocus(this->_p3Label);
+            //tsl::shiftItemFocus(this->_p3Label);
 		    tsl::changeTo<SelectMenu>(3, this->_fanCurveTable, &this->_tableIsChanged);
 			return true;
 		}
@@ -105,7 +103,7 @@ tsl::elm::Element* MainMenu::createUI()
     {
 	    if (keys & HidNpadButton_A) 
         {
-            tsl::shiftItemFocus(this->_p4Label);
+            //tsl::shiftItemFocus(this->_p4Label);
 			tsl::changeTo<SelectMenu>(4, this->_fanCurveTable, &this->_tableIsChanged);
 			return true;
 	    }
@@ -113,6 +111,7 @@ tsl::elm::Element* MainMenu::createUI()
     });
     list->addItem(this->_p4Label);
 
+    auto frame = new tsl::elm::OverlayFrame("NX-FanControl", APP_VERSION);
     frame->setContent(list);
 
     return frame;

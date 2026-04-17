@@ -14,8 +14,6 @@ SelectMenu::SelectMenu(int i, TemperaturePoint* fanCurveTable, bool* tableIsChan
 
 tsl::elm::Element* SelectMenu::createUI(){
 
-    auto frame = new tsl::elm::OverlayFrame("NX-FanControl", APP_VERSION);
-
     auto list = new tsl::elm::List();
 
     list->addItem(this->_tempLabel);
@@ -69,6 +67,7 @@ tsl::elm::Element* SelectMenu::createUI(){
 
     list->addItem(this->_saveBtn);
 
+    auto frame = new tsl::elm::OverlayFrame("NX-FanControl", APP_VERSION);
     frame->setContent(list);
 
     return frame;

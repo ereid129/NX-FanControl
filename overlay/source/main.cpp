@@ -1,4 +1,5 @@
 #define TESLA_INIT_IMPL
+#include <exception_wrap.hpp>
 #include <tesla.hpp>
 #include "main_menu.hpp"
 
