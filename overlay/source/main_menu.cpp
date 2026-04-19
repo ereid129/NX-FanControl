@@ -1,9 +1,17 @@
 #include "main_menu.hpp"
 #include "select_menu.hpp"
+#include "settings_menu.hpp"
+
+extern UiSettings* g_uiSettings;
 
 MainMenu::MainMenu()
 {
     ReadConfigFile(&this->_fanCurveTable);
+
+    this->_fanSpeedLabel = new tsl::elm::ListItem("Fan Speed");
+    this->_socTempLabel  = new HideableListItem("SoC Temp");
+    this->_pcbTempLabel  = new HideableListItem("PCB Temp");
+    this->_skinTempLabel = new HideableListItem("Skin Temp");
 
     this->_p0Label = new tsl::elm::ListItem("P0: " + std::to_string(this->_fanCurveTable->temperature_c) + "C | " + std::to_string((int)(this->_fanCurveTable->fanLevel_f * 100)) + "%");
     this->_p1Label = new tsl::elm::ListItem("P1: " + std::to_string((this->_fanCurveTable + 1)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 1)->fanLevel_f * 100)) + "%");
@@ -49,6 +57,12 @@ tsl::elm::Element* MainMenu::createUI()
 	    return false;
     });
     list->addItem(this->_enabledBtn);
+
+    list->addItem(new tsl::elm::CategoryHeader("Monitoring", true));
+    list->addItem(this->_fanSpeedLabel);
+    list->addItem(this->_socTempLabel);
+    list->addItem(this->_pcbTempLabel);
+    list->addItem(this->_skinTempLabel);
 
     list->addItem(new tsl::elm::CategoryHeader("Fan Curve", true));
     this->_p0Label->setClickListener([this](uint64_t keys)
@@ -111,14 +125,61 @@ tsl::elm::Element* MainMenu::createUI()
     });
     list->addItem(this->_p4Label);
 
-    auto frame = new tsl::elm::OverlayFrame("NX-FanControl", APP_VERSION);
+    auto frame = new tsl::elm::OverlayFrame("NX-FanControl", APP_VERSION, false, "", "Settings");
     frame->setContent(list);
 
     return frame;
 }
 
+static std::string TempStr(float t)
+{
+    int i = (int)t;
+    int d = (int)(t * 10) % 10;
+    return std::to_string(i) + "." + std::to_string(d) + "\u00b0C";
+}
+
 void MainMenu::update()
 {
+    u64 currentTitleId = GetRunningTitleId();
+    if (currentTitleId != this->_lastTitleId) {
+        this->_lastTitleId = currentTitleId;
+        if (currentTitleId != 0) {
+            int preset = GetGameProfile(currentTitleId);
+            const TemperaturePoint* presetTable = PresetIndexTable(preset);
+            if (presetTable) {
+                ApplyPresetData(this->_fanCurveTable, &this->_tableIsChanged, presetTable);
+            } else if (preset == PRESET_IDX_CUSTOM) {
+                TemperaturePoint tmp[5];
+                if (LoadCustomCurve(tmp))
+                    ApplyPresetData(this->_fanCurveTable, &this->_tableIsChanged, tmp);
+            }
+        }
+    }
+
+    int fan = ReadFanPercent();
+    this->_fanSpeedLabel->setValue(fan >= 0 ? std::to_string(fan) + "%" : "--");
+
+    this->_socTempLabel->setVisible(g_uiSettings->showSocTemp != 0);
+    if (g_uiSettings->showSocTemp) {
+        float soc = ReadSocTemp();
+        this->_socTempLabel->setValue(soc >= 0.0f ? TempStr(soc) : "--");
+        if (soc >= 0.0f) this->_socTempLabel->setValueColor(tsl::GradientColor(soc));
+    }
+
+    this->_pcbTempLabel->setVisible(g_uiSettings->showPcbTemp != 0);
+    if (g_uiSettings->showPcbTemp) {
+        float pcb = ReadPcbTemp();
+        this->_pcbTempLabel->setValue(pcb >= 0.0f ? TempStr(pcb) : "--");
+        if (pcb >= 0.0f) this->_pcbTempLabel->setValueColor(tsl::GradientColor(pcb));
+    }
+
+    this->_skinTempLabel->setVisible(g_uiSettings->showSkinTemp != 0);
+    if (g_uiSettings->showSkinTemp) {
+        float skin = ReadSkinTemp();
+        this->_skinTempLabel->setValue(skin >= 0.0f ? TempStr(skin) : "--");
+        if (skin >= 0.0f) this->_skinTempLabel->setValueColor(tsl::GradientColor(skin));
+    }
+
     if(this->_tableIsChanged)
     {
         this->_p0Label->setText("P0: " + std::to_string(this->_fanCurveTable->temperature_c) + "C | " + std::to_string((int)(this->_fanCurveTable->fanLevel_f * 100)) + "%");
@@ -129,4 +190,14 @@ void MainMenu::update()
         
         this->_tableIsChanged = false;
     }
+}
+
+bool MainMenu::handleInput(u64 keysDown, u64 keysHeld, const HidTouchState& touchPos,
+                            HidAnalogStickState leftJoyStick, HidAnalogStickState rightJoyStick)
+{
+    if (keysDown & HidNpadButton_Right) {
+        tsl::changeTo<SettingsMenu>(this->_fanCurveTable, &this->_tableIsChanged);
+        return true;
+    }
+    return false;
 }

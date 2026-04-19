@@ -13,7 +13,7 @@ sysmodule:
 
 all: $(TARGETS)
 	mkdir -p ./out/switch/.overlays
-	cp ./overlay/overlay.ovl ./out/switch/.overlays/Nx-FanControl.ovl
+	cp ./overlay/NX-FanControl.ovl ./out/switch/.overlays/NX-FanControl.ovl
 	
 	mkdir -p ./out/atmosphere/contents/00FF0000B378D640/flags
 	cp ./sysmodule/sysmodule.nsp ./out/atmosphere/contents/00FF0000B378D640/exefs.nsp

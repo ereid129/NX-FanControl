@@ -1,2 +1,12 @@
+build/
 out/
-.vscode
+*.elf
+*.nro
+*.ovl
+*.nsp
+*.nacp
+*.map
+.claude/
+.claude/
+CLAUDE.md
+*.zip
