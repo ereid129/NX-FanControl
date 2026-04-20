@@ -32,9 +32,9 @@ On first launch, only SoC Temp is enabled. PCB and Skin can be enabled in Settin
 
 | Preset | P0 | P1 | P2 | P3 | P4 |
 |---|---|---|---|---|---|
-| Silent | 20°C \| 5% | 45°C \| 30% | 55°C \| 45% | 65°C \| 60% | 100°C \| 80% |
-| Balanced | 20°C \| 10% | 40°C \| 50% | 50°C \| 60% | 60°C \| 70% | 100°C \| 100% |
-| Performance | 20°C \| 20% | 35°C \| 50% | 45°C \| 70% | 55°C \| 85% | 70°C \| 100% |
+| Silent | 20°C \| 5% | 47°C \| 20% | 57°C \| 40% | 67°C \| 60% | 80°C \| 85% |
+| Balanced | 20°C \| 10% | 45°C \| 30% | 55°C \| 55% | 65°C \| 80% | 80°C \| 100% |
+| Performance | 20°C \| 15% | 40°C \| 45% | 52°C \| 70% | 62°C \| 90% | 72°C \| 100% |
 
 ---
 
