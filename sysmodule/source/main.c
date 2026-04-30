@@ -1,7 +1,9 @@
 #include "fancontrol.h"
+#include <sys/stat.h>
 
 // Size of the inner heap (adjust as necessary).
-#define INNER_HEAP_SIZE 0x80000
+#define INNER_HEAP_SIZE   0x80000
+#define NUM_TEMP_POINTS   6
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,9 +47,9 @@ void __appInit(void)
 
     rc = fsInitialize();
     if (R_FAILED(rc))
-        diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_InitFail_FS));       
+        diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_InitFail_FS));
 
-    rc = fsdevMountSdmc();;
+    rc = fsdevMountSdmc();
     if (R_FAILED(rc))
         diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_InitFail_FS));
 
@@ -59,13 +61,22 @@ void __appInit(void)
     if (R_FAILED(rc))
         diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_ShouldNotHappen));
 
+    rc = apmInitialize();
+    if (R_FAILED(rc))
+        diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_ShouldNotHappen));
+
+    rc = psmInitialize();
+    if (R_FAILED(rc))
+        diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_ShouldNotHappen));
+
     smExit();
 }
 
 // Service deinitialization.
 void __appExit(void)
 {
-    CloseFanControllerThread();
+    psmExit();
+    apmExit();
     fanExit();
     i2cExit();
     fsExit();
@@ -76,15 +87,58 @@ void __appExit(void)
 }
 #endif
 
+void RunFanLoop(TemperaturePoint* handheld, TemperaturePoint* docked);
+
+static void writeFanConfig(TemperaturePoint* handheld, TemperaturePoint* docked)
+{
+    FILE* f = fopen(CONFIG_FILE, "wb");
+    if (f) {
+        fwrite(handheld, sizeof(TemperaturePoint) * NUM_TEMP_POINTS, 1, f);
+        fwrite(docked,   sizeof(TemperaturePoint) * NUM_TEMP_POINTS, 1, f);
+        fclose(f);
+    }
+}
+
+static void readFanConfig(TemperaturePoint** handheld, TemperaturePoint** docked)
+{
+    static const TemperaturePoint defaultHandheld[NUM_TEMP_POINTS] = {
+        { 37, 0.00f }, { 40, 0.20f }, { 48, 0.20f },
+        { 55, 0.40f }, { 60, 0.60f }, { 60, 0.60f },
+    };
+    static const TemperaturePoint defaultDocked[NUM_TEMP_POINTS] = {
+        { 37, 0.00f }, { 40, 0.20f }, { 53, 0.30f },
+        { 57, 0.40f }, { 65, 0.60f }, { 76, 1.00f },
+    };
+
+    *handheld = malloc(sizeof(TemperaturePoint) * NUM_TEMP_POINTS);
+    *docked   = malloc(sizeof(TemperaturePoint) * NUM_TEMP_POINTS);
+    memcpy(*handheld, defaultHandheld, sizeof(defaultHandheld));
+    memcpy(*docked,   defaultDocked,   sizeof(defaultDocked));
+
+    FILE* f = fopen(CONFIG_FILE, "rb");
+    if (f) {
+        if (fread(*handheld, sizeof(TemperaturePoint) * NUM_TEMP_POINTS, 1, f) != 1 ||
+            fread(*docked,   sizeof(TemperaturePoint) * NUM_TEMP_POINTS, 1, f) != 1) {
+            memcpy(*handheld, defaultHandheld, sizeof(defaultHandheld));
+            memcpy(*docked,   defaultDocked,   sizeof(defaultDocked));
+        }
+        fclose(f);
+    }
+}
+
 // Main program entrypoint
 int main(int argc, char* argv[])
 {
-    TemperaturePoint *table;
-    
-    ReadConfigFile(&table);
-    InitFanController(table);
-    StartFanControllerThread();
-    WaitFanController();
+    mkdir("./config", 0777);
+    mkdir("./config/NX-FanControl", 0777);
 
+    TemperaturePoint *handheld, *docked;
+    readFanConfig(&handheld, &docked);
+
+    // Seed config file on first install using the defaults readFanConfig loaded.
+    if (access(CONFIG_FILE, F_OK) != 0)
+        writeFanConfig(handheld, docked);
+
+    RunFanLoop(handheld, docked);
     return 0;
 }

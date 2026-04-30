@@ -1,32 +1,38 @@
 #include "main_menu.hpp"
 #include "select_menu.hpp"
 #include "settings_menu.hpp"
+#include <cmath>
 
-extern UiSettings* g_uiSettings;
+static std::string PLabel(int idx, TemperaturePoint* h, TemperaturePoint* d)
+{
+    return "P" + std::to_string(idx) + ": " +
+           std::to_string(h[idx].temperature_c) + "C/" +
+           std::to_string(d[idx].temperature_c) + "C | " +
+           std::to_string((int)std::lround(h[idx].fanLevel_f * 100)) + "%/" +
+           std::to_string((int)std::lround(d[idx].fanLevel_f * 100)) + "%";
+}
 
 MainMenu::MainMenu()
 {
-    ReadConfigFile(&this->_fanCurveTable);
+    ReadFanConfig(&this->_fanCurveHandheld, &this->_fanCurveDocked);
+    snprintf(g_monitor.appIdBuf, sizeof(g_monitor.appIdBuf), "%016llX",
+             (unsigned long long)0x0100000000001000ULL);
+    snprintf(g_monitor.fanBuf, sizeof(g_monitor.fanBuf), "--");
 
-    this->_fanSpeedLabel = new tsl::elm::ListItem("Fan Speed");
-    this->_socTempLabel  = new HideableListItem("SoC Temp");
-    this->_pcbTempLabel  = new HideableListItem("PCB Temp");
-    this->_skinTempLabel = new HideableListItem("Skin Temp");
-
-    this->_p0Label = new tsl::elm::ListItem("P0: " + std::to_string(this->_fanCurveTable->temperature_c) + "C | " + std::to_string((int)(this->_fanCurveTable->fanLevel_f * 100)) + "%");
-    this->_p1Label = new tsl::elm::ListItem("P1: " + std::to_string((this->_fanCurveTable + 1)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 1)->fanLevel_f * 100)) + "%");
-    this->_p2Label = new tsl::elm::ListItem("P2: " + std::to_string((this->_fanCurveTable + 2)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 2)->fanLevel_f * 100)) + "%");
-    this->_p3Label = new tsl::elm::ListItem("P3: " + std::to_string((this->_fanCurveTable + 3)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 3)->fanLevel_f * 100)) + "%");
-    this->_p4Label = new tsl::elm::ListItem("P4: " + std::to_string((this->_fanCurveTable + 4)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 4)->fanLevel_f * 100)) + "%");
-
-    if (IsRunning() != 0)
+    TemperaturePoint* h = this->_fanCurveHandheld;
+    TemperaturePoint* d = this->_fanCurveDocked;
     {
-        this->_enabledBtn = new tsl::elm::ToggleListItem("Enabled", true);
+        int preset = DetectCurvePreset(h, d);
+        if (preset != PRESET_IDX_NONE)
+            g_monitor.curvePresetStr = PresetIndexName(preset);
+        else
+            g_monitor.curvePresetStr = (access(CONFIG_FILE, F_OK) == 0) ? "Not Saved" : "Default";
     }
-    else
-    {
-        this->_enabledBtn = new tsl::elm::ToggleListItem("Enabled", false);
-    }
+    for (int i = 0; i < NUM_TEMP_POINTS; i++)
+        this->_pointLabels[i] = new tsl::elm::ListItem(PLabel(i, h, d));
+
+    this->_fanCurveHeader = new tsl::elm::CategoryHeader("Fan Curve", true);
+    this->_enabledBtn = new tsl::elm::ToggleListItem("Enabled", IsRunning() != 0);
 }
 
 tsl::elm::Element* MainMenu::createUI()
@@ -37,157 +43,91 @@ tsl::elm::Element* MainMenu::createUI()
 
     this->_enabledBtn->setStateChangedListener([this](bool state)
     {
-	    if (state)
+        if (state)
         {
             CreateB2F();
-            const NcmProgramLocation programLocation{
-                .program_id = SysFanControlID,
-                .storageID = NcmStorageId_None,
-            };
-            u64 pid = 0;
-            pmshellLaunchProgram(0, &programLocation, &pid);
+            pmshellTerminateProgram(SysFanControlID);
+            {
+                const NcmProgramLocation programLocation{
+                    .program_id = SysFanControlID,
+                    .storageID = NcmStorageId_None,
+                };
+                u64 pid = 0;
+                pmshellLaunchProgram(0, &programLocation, &pid);
+            }
             return true;
-		}
+        }
         else
         {
             RemoveB2F();
-            pmshellTerminateProgram(SysFanControlID);
+            if (IsRunning() != 0)
+                pmshellTerminateProgram(SysFanControlID);
             return true;
         }
-	    return false;
+        return false;
     });
     list->addItem(this->_enabledBtn);
+    list->addItem(this->_fanCurveHeader);
 
-    list->addItem(new tsl::elm::CategoryHeader("Monitoring", true));
-    list->addItem(this->_fanSpeedLabel);
-    list->addItem(this->_socTempLabel);
-    list->addItem(this->_pcbTempLabel);
-    list->addItem(this->_skinTempLabel);
+    auto addPoint = [&](int idx, tsl::elm::ListItem* label) {
+        label->setClickListener([this, idx](uint64_t keys) {
+            if (keys & HidNpadButton_A) {
+                tsl::changeTo<SelectMenu>(idx, this->_fanCurveHandheld, this->_fanCurveDocked, &this->_tableIsChanged);
+                return true;
+            }
+            return false;
+        });
+        list->addItem(label);
+    };
 
-    list->addItem(new tsl::elm::CategoryHeader("Fan Curve", true));
-    this->_p0Label->setClickListener([this](uint64_t keys)
-    {
-	    if (keys & HidNpadButton_A) 
-        {
-            //tsl::shiftItemFocus(this->_p0Label);
-			tsl::changeTo<SelectMenu>(0, this->_fanCurveTable, &this->_tableIsChanged);
-			return true;
-		}
-		return false; 
-    });
-    list->addItem(this->_p0Label);
+    for (int i = 0; i < NUM_TEMP_POINTS; i++)
+        addPoint(i, this->_pointLabels[i]);
 
-    this->_p1Label->setClickListener([this](uint64_t keys)
-    {
-	    if (keys & HidNpadButton_A) 
-        {
-            //tsl::shiftItemFocus(this->_p1Label);
-			tsl::changeTo<SelectMenu>(1, this->_fanCurveTable, &this->_tableIsChanged);
-			return true;
-		}
-		return false;
-    });
-    list->addItem(this->_p1Label);
+    auto* frame = new tsl::elm::HeaderOverlayFrame(191);
 
-    this->_p2Label->setClickListener([this](uint64_t keys)
-    {
-	    if (keys & HidNpadButton_A) 
-        {
-            //tsl::shiftItemFocus(this->_p2Label);
-			tsl::changeTo<SelectMenu>(2, this->_fanCurveTable, &this->_tableIsChanged);
-			return true;
-		}
-		return false; 
-    });
-    list->addItem(this->_p2Label);
+    static const std::string s_hint = "\xee\x83\xae" + ult::GAP_2 + "Settings";
+    frame->setHeader(new tsl::elm::CustomDrawer([](tsl::gfx::Renderer* r, s32 x, s32 y, s32 w, s32 h) {
+        DrawMonitoringHeader(r, x, y, w, h, s_hint, "\xee\x83\xae");
+    }));
 
-    this->_p3Label->setClickListener([this](uint64_t keys)
-    {
-	    if (keys & HidNpadButton_A) 
-        {
-            //tsl::shiftItemFocus(this->_p3Label);
-		    tsl::changeTo<SelectMenu>(3, this->_fanCurveTable, &this->_tableIsChanged);
-			return true;
-		}
-		return false; 
-    });
-    list->addItem(this->_p3Label);
-
-    this->_p4Label->setClickListener([this](uint64_t keys)
-    {
-	    if (keys & HidNpadButton_A) 
-        {
-            //tsl::shiftItemFocus(this->_p4Label);
-			tsl::changeTo<SelectMenu>(4, this->_fanCurveTable, &this->_tableIsChanged);
-			return true;
-	    }
-	    return false; 
-    });
-    list->addItem(this->_p4Label);
-
-    auto frame = new tsl::elm::OverlayFrame("NX-FanControl", APP_VERSION, false, "", "Settings");
     frame->setContent(list);
-
     return frame;
-}
-
-static std::string TempStr(float t)
-{
-    int i = (int)t;
-    int d = (int)(t * 10) % 10;
-    return std::to_string(i) + "." + std::to_string(d) + "\u00b0C";
 }
 
 void MainMenu::update()
 {
-    u64 currentTitleId = GetRunningTitleId();
-    if (currentTitleId != this->_lastTitleId) {
-        this->_lastTitleId = currentTitleId;
-        if (currentTitleId != 0) {
-            int preset = GetGameProfile(currentTitleId);
-            const TemperaturePoint* presetTable = PresetIndexTable(preset);
-            if (presetTable) {
-                ApplyPresetData(this->_fanCurveTable, &this->_tableIsChanged, presetTable);
-            } else if (preset == PRESET_IDX_CUSTOM) {
-                TemperaturePoint tmp[5];
-                if (LoadCustomCurve(tmp))
-                    ApplyPresetData(this->_fanCurveTable, &this->_tableIsChanged, tmp);
+    if (UpdateMonitoring()) {
+        // Title ID — game profile switching
+        u64 currentTitleId = GetRunningTitleId();
+        if (currentTitleId != this->_lastTitleId) {
+            this->_lastTitleId = currentTitleId;
+            u64 displayTid = currentTitleId != 0 ? currentTitleId : 0x0100000000001000ULL;
+            snprintf(g_monitor.appIdBuf, sizeof(g_monitor.appIdBuf),
+                     "%016llX", (unsigned long long)displayTid);
+            if (currentTitleId != 0) {
+                int preset = GetGameProfile(currentTitleId);
+                const FanPreset* presetTable = PresetIndexTable(preset);
+                if (presetTable) {
+                    ApplyPresetData(this->_fanCurveHandheld, this->_fanCurveDocked,
+                                    &this->_tableIsChanged,
+                                    presetTable->handheld, presetTable->docked);
+                } else if (preset == PRESET_IDX_CUSTOM) {
+                    TemperaturePoint tmpH[NUM_TEMP_POINTS], tmpD[NUM_TEMP_POINTS];
+                    if (LoadCustomCurve(tmpH, tmpD))
+                        ApplyPresetData(this->_fanCurveHandheld, this->_fanCurveDocked,
+                                        &this->_tableIsChanged, tmpH, tmpD);
+                }
             }
         }
     }
 
-    int fan = ReadFanPercent();
-    this->_fanSpeedLabel->setValue(fan >= 0 ? std::to_string(fan) + "%" : "--");
-
-    this->_socTempLabel->setVisible(g_uiSettings->showSocTemp != 0);
-    if (g_uiSettings->showSocTemp) {
-        float soc = ReadSocTemp();
-        this->_socTempLabel->setValue(soc >= 0.0f ? TempStr(soc) : "--");
-        if (soc >= 0.0f) this->_socTempLabel->setValueColor(tsl::GradientColor(soc));
-    }
-
-    this->_pcbTempLabel->setVisible(g_uiSettings->showPcbTemp != 0);
-    if (g_uiSettings->showPcbTemp) {
-        float pcb = ReadPcbTemp();
-        this->_pcbTempLabel->setValue(pcb >= 0.0f ? TempStr(pcb) : "--");
-        if (pcb >= 0.0f) this->_pcbTempLabel->setValueColor(tsl::GradientColor(pcb));
-    }
-
-    this->_skinTempLabel->setVisible(g_uiSettings->showSkinTemp != 0);
-    if (g_uiSettings->showSkinTemp) {
-        float skin = ReadSkinTemp();
-        this->_skinTempLabel->setValue(skin >= 0.0f ? TempStr(skin) : "--");
-        if (skin >= 0.0f) this->_skinTempLabel->setValueColor(tsl::GradientColor(skin));
-    }
-
-    if(this->_tableIsChanged)
-    {
-        this->_p0Label->setText("P0: " + std::to_string(this->_fanCurveTable->temperature_c) + "C | " + std::to_string((int)(this->_fanCurveTable->fanLevel_f * 100)) + "%");
-        this->_p1Label->setText("P1: " + std::to_string((this->_fanCurveTable + 1)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 1)->fanLevel_f * 100)) + "%");
-        this->_p2Label->setText("P2: " + std::to_string((this->_fanCurveTable + 2)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 2)->fanLevel_f * 100)) + "%");
-        this->_p3Label->setText("P3: " + std::to_string((this->_fanCurveTable + 3)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 3)->fanLevel_f * 100)) + "%");
-        this->_p4Label->setText("P4: " + std::to_string((this->_fanCurveTable + 4)->temperature_c) + "C | " + std::to_string((int)((this->_fanCurveTable + 4)->fanLevel_f * 100)) + "%");
-        
+    if (this->_tableIsChanged) {
+        TemperaturePoint* hh = this->_fanCurveHandheld;
+        TemperaturePoint* dd = this->_fanCurveDocked;
+        for (int i = 0; i < NUM_TEMP_POINTS; i++)
+            this->_pointLabels[i]->setText(PLabel(i, hh, dd));
+        int preset = DetectCurvePreset(hh, dd);
+        g_monitor.curvePresetStr = (preset == PRESET_IDX_NONE) ? "Not Saved" : PresetIndexName(preset);
         this->_tableIsChanged = false;
     }
 }
@@ -196,7 +136,7 @@ bool MainMenu::handleInput(u64 keysDown, u64 keysHeld, const HidTouchState& touc
                             HidAnalogStickState leftJoyStick, HidAnalogStickState rightJoyStick)
 {
     if (keysDown & HidNpadButton_Right) {
-        tsl::changeTo<SettingsMenu>(this->_fanCurveTable, &this->_tableIsChanged);
+        tsl::changeTo<SettingsMenu>(this->_fanCurveHandheld, this->_fanCurveDocked, &this->_tableIsChanged);
         return true;
     }
     return false;

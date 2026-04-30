@@ -10,6 +10,8 @@ A Nintendo Switch fan control overlay and sysmodule. Fork of [ppkantorski/NX-Fan
 - Set a custom 5-point fan curve (temperature → fan speed %)
 - Fine-tune slider values by ±1 using **R + D-pad left/right** (default step is ±5)
 - Fan curve is applied by the background sysmodule every 100ms
+- Hysteresis control: fan turns on at P1 temp, turns off at P0 temp — eliminates clicking from threshold oscillation
+- Hardware minimum enforced: fan runs at 20% minimum or fully off, never between
 
 ### Monitoring
 - Real-time fan speed display
@@ -30,11 +32,15 @@ On first launch, only SoC Temp is enabled. PCB and Skin can be enabled in Settin
 
 ## Fan Curve Presets
 
-| Preset | P0 | P1 | P2 | P3 | P4 |
+Presets use a hysteresis design: **P0 is the turn-off temperature** (fan level 0%), **P1 is the turn-on temperature** (fan level ≥ 20%). The fan will not start until P1 is reached, and will not stop until temp drops back to P0. This prevents clicking from rapid on/off cycling near the threshold.
+
+The minimum running speed is 20% — the hardware cannot sustain lower speeds. Fan level values between 1–19% are automatically snapped to 20% when editing a custom curve.
+
+| Preset | P0 (off) | P1 (on) | P2 | P3 | P4 |
 |---|---|---|---|---|---|
-| Silent | 20°C \| 5% | 47°C \| 20% | 57°C \| 40% | 67°C \| 60% | 80°C \| 85% |
-| Balanced | 20°C \| 10% | 45°C \| 30% | 55°C \| 55% | 65°C \| 80% | 80°C \| 100% |
-| Performance | 20°C \| 15% | 40°C \| 45% | 52°C \| 70% | 62°C \| 90% | 72°C \| 100% |
+| Silent | 45°C \| 0% | 48°C \| 20% | 60°C \| 40% | 70°C \| 60% | 80°C \| 85% |
+| Balanced | 37°C \| 0% | 40°C \| 20% | 57°C \| 55% | 67°C \| 80% | 80°C \| 100% |
+| Performance | 35°C \| 0% | 38°C \| 20% | 50°C \| 60% | 60°C \| 85% | 70°C \| 100% |
 
 ---
 
@@ -63,7 +69,7 @@ Open the Ultrahand overlay menu and enable NX-FanControl.
 [devkitPro](https://devkitpro.org/wiki/Getting_Started) with libnx
 
 ```bash
-git clone --recurse-submodules https://github.com/ereid129/NX-FanControl.git
+git clone --recurse-submodules https://github.com/SamuraiBuyer/NX-FanControl.git
 cd NX-FanControl
 
 # Build everything and stage to ./out/
