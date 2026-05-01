@@ -29,9 +29,6 @@ A Nintendo Switch fan control overlay and sysmodule. Fork of [ppkantorski/NX-Fan
 - **Custom:** loads your saved custom curve
 - **Game Profiles:** assign a preset per game — auto-applies when the game launches
 
-### Default Temperature Display
-On first launch, only SoC Temp is enabled. PCB and Skin can be enabled in Settings.
-
 ---
 
 ## Fan Curve Presets
